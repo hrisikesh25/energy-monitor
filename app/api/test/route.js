@@ -1,3 +1,10 @@
+export async function GET() {
+  return Response.json({
+    success: true,
+    message: "Energy Monitor API is working"
+  });
+}
+
 export async function POST(request) {
   try {
     const data = await request.json();
@@ -14,11 +21,9 @@ export async function POST(request) {
     return Response.json(
       {
         success: false,
-        error: error.message
+        error: "Invalid JSON"
       },
-      {
-        status: 400
-      }
+      { status: 400 }
     );
   }
 }
