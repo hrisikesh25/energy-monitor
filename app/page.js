@@ -8,46 +8,141 @@ export default function Home() {
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
 
-async function fetchEnergyData() {
+  const [relayLoading, setRelayLoading] = useState(false);
+  const [relayCommand, setRelayCommand] = useState("OFF");
 
-  try {
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://energy-monitor-liard.vercel.app";
 
-    const API_URL =
-      process.env.NEXT_PUBLIC_API_URL ||
-      "https://energy-monitor-liard.vercel.app";
 
-    const response = await fetch(`${API_URL}/api/data`, {
-      cache: "no-store"
-    });
+  // ===================================================
+  // FETCH ENERGY DATA
+  // ===================================================
 
-    const result = await response.json();
+  async function fetchEnergyData() {
 
-    if (result.success && result.data) {
+    try {
 
-      setData(result.data);
-      setConnected(true);
-      setLastUpdate(new Date());
+      const response = await fetch(`${API_URL}/api/data`, {
+        cache: "no-store"
+      });
 
-    } else {
+      const result = await response.json();
 
+      if (result.success && result.data) {
+
+        setData(result.data);
+        setConnected(true);
+        setLastUpdate(new Date());
+
+      } else {
+
+        setConnected(false);
+
+      }
+
+    } catch (error) {
+
+      console.error("Failed to fetch energy data:", error);
       setConnected(false);
 
     }
 
-  } catch (error) {
+  }
 
-    console.error("Failed to fetch energy data:", error);
-    setConnected(false);
+
+  // ===================================================
+  // FETCH RELAY COMMAND
+  // ===================================================
+
+  async function fetchRelayState() {
+
+    try {
+
+      const response = await fetch(`${API_URL}/api/relay`, {
+        cache: "no-store"
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+
+        setRelayCommand(result.relay);
+
+      }
+
+    } catch (error) {
+
+      console.error("Failed to fetch relay state:", error);
+
+    }
 
   }
-}
 
+
+  // ===================================================
+  // CHANGE RELAY
+  // ===================================================
+
+  async function setRelay(state) {
+
+    if (relayLoading) return;
+
+    setRelayLoading(true);
+
+    try {
+
+      const response = await fetch(`${API_URL}/api/relay`, {
+
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          relay: state
+        })
+
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+
+        setRelayCommand(result.relay);
+
+      }
+
+    } catch (error) {
+
+      console.error("Failed to control relay:", error);
+
+    } finally {
+
+      setRelayLoading(false);
+
+    }
+
+  }
+
+
+  // ===================================================
+  // START POLLING
+  // ===================================================
 
   useEffect(() => {
 
     fetchEnergyData();
+    fetchRelayState();
 
-    const interval = setInterval(fetchEnergyData, 2000);
+    const interval = setInterval(() => {
+
+      fetchEnergyData();
+      fetchRelayState();
+
+    }, 2000);
 
     return () => clearInterval(interval);
 
@@ -63,9 +158,15 @@ async function fetchEnergyData() {
       <header className="header">
 
         <div>
+
           <h1>⚡ Energy Monitoring System</h1>
-          <p>Real-time electrical energy monitoring</p>
+
+          <p>
+            Real-time electrical energy monitoring
+          </p>
+
         </div>
+
 
         <div className="connection">
 
@@ -75,7 +176,9 @@ async function fetchEnergyData() {
             }`}
           ></span>
 
-          {connected ? "Device Online" : "Waiting for Device"}
+          {connected
+            ? "Device Online"
+            : "Waiting for Device"}
 
         </div>
 
@@ -87,26 +190,104 @@ async function fetchEnergyData() {
       <section className="device-card">
 
         <div>
+
           <span>Device ID</span>
+
           <strong>
             {data?.deviceId || "ENERGY-001"}
           </strong>
+
         </div>
 
+
         <div>
+
           <span>Relay</span>
+
           <strong>
             {data?.relay || "OFF"}
           </strong>
+
         </div>
 
+
         <div>
+
           <span>Last Update</span>
+
           <strong>
+
             {lastUpdate
               ? lastUpdate.toLocaleTimeString()
               : "--"}
+
           </strong>
+
+        </div>
+
+      </section>
+
+
+      {/* RELAY CONTROL */}
+
+      <section className="status-panel">
+
+        <h2>Relay Control</h2>
+
+        <div className="status-grid">
+
+          <div>
+
+            <span>Current Relay State</span>
+
+            <b
+              className={
+                data?.relay === "ON"
+                  ? "good"
+                  : "bad"
+              }
+            >
+
+              {data?.relay || "OFF"}
+
+            </b>
+
+          </div>
+
+
+          <div>
+
+            <span>Control</span>
+
+            <div>
+
+              <button
+                onClick={() => setRelay("ON")}
+                disabled={relayLoading}
+              >
+
+                {relayLoading && relayCommand === "ON"
+                  ? "Turning ON..."
+                  : "Turn ON"}
+
+              </button>
+
+
+              <button
+                onClick={() => setRelay("OFF")}
+                disabled={relayLoading}
+              >
+
+                {relayLoading && relayCommand === "OFF"
+                  ? "Turning OFF..."
+                  : "Turn OFF"}
+
+              </button>
+
+            </div>
+
+          </div>
+
         </div>
 
       </section>
@@ -184,29 +365,54 @@ async function fetchEnergyData() {
         <div className="status-grid">
 
           <div>
+
             <span>Arduino Yún</span>
+
             <b className={connected ? "good" : "bad"}>
-              {connected ? "ONLINE" : "OFFLINE"}
+
+              {connected
+                ? "ONLINE"
+                : "OFFLINE"}
+
             </b>
+
           </div>
 
+
           <div>
+
             <span>Vercel API</span>
-            <b className="good">ONLINE</b>
-          </div>
 
-          <div>
-            <span>Data Transmission</span>
-            <b className={connected ? "good" : "bad"}>
-              {connected ? "ACTIVE" : "WAITING"}
+            <b className="good">
+              ONLINE
             </b>
+
           </div>
 
+
           <div>
+
+            <span>Data Transmission</span>
+
+            <b className={connected ? "good" : "bad"}>
+
+              {connected
+                ? "ACTIVE"
+                : "WAITING"}
+
+            </b>
+
+          </div>
+
+
+          <div>
+
             <span>Relay State</span>
+
             <b>
               {data?.relay || "OFF"}
             </b>
+
           </div>
 
         </div>
@@ -222,12 +428,21 @@ async function fetchEnergyData() {
       </footer>
 
     </main>
+
   );
 }
 
 
+// =====================================================
+// METRIC CARD
+// =====================================================
 
-function MetricCard({ title, value, unit, icon }) {
+function MetricCard({
+  title,
+  value,
+  unit,
+  icon
+}) {
 
   return (
 
@@ -237,13 +452,15 @@ function MetricCard({ title, value, unit, icon }) {
         {icon}
       </div>
 
+
       <div>
 
         <p>{title}</p>
 
         <h2>
 
-          {value !== undefined && value !== null
+          {value !== undefined &&
+           value !== null
             ? value
             : "--"}
 
@@ -256,4 +473,5 @@ function MetricCard({ title, value, unit, icon }) {
     </div>
 
   );
+
 }
